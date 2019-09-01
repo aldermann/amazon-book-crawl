@@ -1,16 +1,15 @@
 import requests
 from bs4 import BeautifulSoup as BS
 from urllib.parse import urljoin
-import scrap_detail
-import upload_detail
 from tqdm import tqdm
 
 first_selector = ".s-access-detail-page"
 other_selector = ".s-result-list.s-search-results.sg-row h2.a-size-mini.a-spacing-none.a-color-base.s-line-clamp-2 > a"
 
 first_url = "https://www.amazon.com/b/?node=15762881&ref_=Oct_CateC_173508_0&pf_rd_p=07d7dc4a-b93c-5561-8d0b-4968d722a9a4&pf_rd_s=merchandised-search-3&pf_rd_t=101&pf_rd_i=173508&pf_rd_m=ATVPDKIKX0DER&pf_rd_r=6GD8TJTBJJJXF8B9QSHA&pf_rd_r=6GD8TJTBJJJXF8B9QSHA&pf_rd_p=07d7dc4a-b93c-5561-8d0b-4968d722a9a4"
-other_url_tmpl = "https://www.amazon.com/s?i=stripbooks&rh=n%3A283155%2Cn%3A1000%2Cn%3A1%2Cn%3A173508%2Cn%3A15762881&page={page}&qid=1567152919&ref=sr_pg_3"
 
+first_page_next_selector = "#pagnNextLink"
+other_page_next_selector = ".a-pagination>.a-last>a"
 
 sess = requests.Session()
 sess.headers.update({
@@ -21,20 +20,19 @@ sess.headers.update({
     "sec-fetch-site": "none",
     "sec-fetch-user": "?1",
     "upgrade-insecure-requests": "1",
-    "cookie": 'session-id=147-9226649-5809203; session-id-time=2082787201l; i18n-prefs=USD; sp-cdn="L5Z9: VN"; x-wl-uid=1NoJiLkWZ7msmSPkxSqpHvND/J3lRDcuIvt1mWW7rgjMZZmxYdP1svQ4IVwnrfASdgZa2nhCaq8I=; ubid-main=134-3518144-0922607; session-token=xREIcuVlcwQom5JQn275fFD4HvlejehRt8SohNSE3+HisElCZkHMioSc0IqvlD8IWIeDMr0QR5L+MTYLiqhdXI6ZTFXT4SW78aNEG4bUBJVkkRRzHZuSgZQ4bTgWv+BLMF6MdbKvrZfvJ4VcueZy7C24gcaMiv3KtmluSo+MwzS8vRSZnunXKRNjhJdO1oAs; csm-hit=tb:MF3M8H0DE73K3T2BEMTS+s-MF3M8H0DE73K3T2BEMTS|1567236278567&t:1567236278567&adb:adblk_yes'
+    "cookie": 'session-id=138-3466000-2647616; session-id-time=2082787201l; i18n-prefs=USD; sp-cdn="L5Z9:VN"; ubid-main=135-8207411-0396738; x-wl-uid=1OvcQf/7hLtwNFXf/2fURGcifuyJ3Q8bHLwVydm67W6Xfkb0CbvPhh3bX3E0d0dyTZOaIDuPcLR8=; session-token=BmTgGqj3fHijkAZHHlqbNKu+JJsMArRvjOlaU8l/sMhtoC45ZdBl6UUGgk4X+h+DPL2Tj3qyuh9kmX021ntQIcbB1WixAmHIZNd2/nHXVl2UX74XszVQmAAwZeofuaDgziB7TAPxdOzg4sgag28C6uydsE7WIam7Hf7tj9nzIaLPovihi/PbVfKhlJXpWWIk5o2UJFhpTcrGWlnrKS/s3uBaj/eg/3zNbvJ3mrWmS6ygrU4fENizMOdP5FLgRnpw; csm-hit=tb:s-CSZGBY2QFHYYKFXEVDVF|1567338953279&t:1567338956868&adb:adblk_yes'
 })
 
-# sess.proxies = {
-#     "https": "https://115.68.14.247:3128"
-# }
 
-
-def get_book_links(url, sel):
+def get_book_links(url, sel, next_sel):
     resp = None
-    while True:
+    nextPageLink = None
+    for _ in range(1, 100):
         resp = sess.get(url)
         if resp.status_code == 200:
             break
+    if resp.status_code != 200:
+        return ([], nextPageLink)
     html = BS(resp.text, "html.parser")
 
     anchors = html.select(sel)
@@ -44,54 +42,36 @@ def get_book_links(url, sel):
         if "amazon" not in h:
             h = urljoin("https://www.amazon.com", h)
         res.append(h)
-    return res
+    if (len(html.select(next_sel)) == 0):
+        return res, None
+    nextPageLink = html.select(next_sel)[0]["href"]
+    if "amazon" not in nextPageLink:
+        nextPageLink = urljoin("https://www.amazon.com", nextPageLink)
+    return (res, nextPageLink)
 
-
-left_over_links = []
-
-
-def crawl_page(it):
-    book_links = []
+all_book_links = []
+f = open("links.txt", "w")
+def crawl_page(url, it):
+    nextPageLink = None
     if it == 1:
-        book_links = get_book_links(first_url, first_selector)
+        book_links, nextPageLink = get_book_links(
+            url, first_selector, first_page_next_selector)
     else:
-        book_links = get_book_links(
-            other_url_tmpl.format(page=it), other_selector)
-    details = []
-    for link in tqdm(book_links, desc=f"Scraping progress in page {it}"):
-        detail = scrap_detail.scrap_book_detail(link, sess, random_cookie=True)
-        if isinstance(detail, int):
-            tqdm.write(
-                f"Error fetching page: {link} with error code: {detail}. Putting in leftover links")
-            left_over_links.append(link)
-            continue
-        detail = {**detail, "_index": "amazon_books",
-                  "_type": "books", "URL": link}
-        details.append(detail)
-
-    tqdm.write(f"Uploading page {it} to Elasticsearch")
-    upload_detail.upload_detail_bunk(details)
+        book_links, nextPageLink = get_book_links(
+            url, other_selector, other_page_next_selector)
+    all_book_links.extend(book_links)
+    tqdm.write(f"Found {len(book_links)} links in page {it}")
+    for link in book_links:
+        f.write(link)
+        f.write("\n")
+    return nextPageLink
 
 
-for it in tqdm(range(21, 31), desc="Page progress"):
-    crawl_page(it)
-
-for it in range(5):
-    details = []
-    curr_leftover = []
-    for link in tqdm(left_over_links, desc=f"Scraping progress in left over links"):
-        detail = scrap_detail.scrap_book_detail(link, sess, random_cookie=True)
-        if isinstance(detail, int):
-            tqdm.write(
-                f"Error fetching page: {link} with error code: {detail}")
-            curr_leftover.append(link)
-            continue
-        detail = {**detail, "_index": "amazon_books",
-                  "_type": "books", "URL": link}
-        details.append(detail)
-    tqdm.write(f"Uploading left over links to Elasticsearch")
-    upload_detail.upload_detail_bunk(details)
-    if len(curr_leftover) == 0:
+url = first_url
+for it in tqdm(range(1, 76), desc="Get books links progress"):
+    nextPage = crawl_page(url, it)
+    if nextPage is None:
         break
-    else:
-        left_over_links = curr_leftover
+    url = nextPage
+
+f.close()

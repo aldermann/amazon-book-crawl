@@ -1,4 +1,4 @@
-import tqdm
+from tqdm import tqdm
 import scrap_detail
 import upload_detail
 import requests
@@ -31,7 +31,7 @@ for it in range(200):
             left_over.append(link)
             continue
         tqdm.write("Fetched")
-        detail = {**detail, "_index": "architecture_books",
+        detail = {**detail, "_index": "amazon_books",
                 "_type": "books", "URL": link}
         details.append(detail)
     tqdm.write("Uploading {} links to Elasticsearch".format(len(details)))

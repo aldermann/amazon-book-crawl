@@ -5,6 +5,15 @@
 -   Links that is blocked by Captcha is put into a leftover links list. The list is sieved for 20 times or until no leftover links are not visited.
 -   After scraping every books in a page, we index the result to Elasticsearch.
 
-# Indexed result:
-Elasticsearch url: (https://fz98j6ogqz:qez1c4u6k6@book-crawl-amazon-632909585.ap-southeast-2.bonsaisearch.net:443)[https://fz98j6ogqz:qez1c4u6k6@book-crawl-amazon-632909585.ap-southeast-2.bonsaisearch.net:443]
-Index name is: /architecture_books
+## Indexed result:
+Elasticsearch url: [https://fz98j6ogqz:qez1c4u6k6@book-crawl-amazon-632909585.ap-southeast-2.bonsaisearch.net:443](https://fz98j6ogqz:qez1c4u6k6@book-crawl-amazon-632909585.ap-southeast-2.bonsaisearch.net:443)
+
+Index name is: /amazon_books
+
+## How to use?:
+-   `pip3 install requests beautifulsoup4 tqdm elasticsearch`
+-   `python3 crawl.py`
+-   `python3 crawl_book.py`
+
+## Shortcoming:
+- Because of captcha, I could only scrape 438 in 1196 books.
